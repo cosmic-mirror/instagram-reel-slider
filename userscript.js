@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Instagram Reel Slider + Keyboard Shortcuts
+// @name         Instagram Reel Slider
 // @namespace    https://github.com/spactable/instagram-reel-slider
-// @version      3.0
-// @description  Minimal progress scrubber for Instagram videos + keyboard shortcuts (play/pause, seek, speed, volume)
-// @author       instagram-reel-slider contributors
+// @version      3.1
+// @description  Minimal progress scrubber for Instagram videos + configurable keyboard shortcuts
+// @author       me
 // @match        https://www.instagram.com/*
 // @grant        none
 // @run-at       document-idle
@@ -11,6 +11,24 @@
 
 (function () {
   'use strict';
+
+  // ==========================================
+  // ---- CONFIGURATION (SHORTCUT TOGGLES) ----
+  // ==========================================
+  // Change these to `true` to turn a specific shortcut ON.
+  // By default, they are all set to `false` (OFF).
+  // Note: All shortcuts require holding the 'Alt' key.
+  const CONFIG = {
+    enablePlayPause: false,    // Alt + K
+    enableSeekBackward: false, // Alt + ArrowLeft
+    enableSeekForward: false,  // Alt + ArrowRight
+    enableVolumeUp: false,     // Alt + ArrowUp
+    enableVolumeDown: false,   // Alt + ArrowDown
+    enableSpeedDown: false,    // Alt + , (comma)
+    enableSpeedUp: false,      // Alt + . (period) or Alt + S
+    enableSpeedReset: false    // Alt + 0
+  };
+  // ==========================================
 
   // ---- Styles (insert once) ----
   if (!document.head.querySelector('#insta-custom-seek-styles')) {
@@ -263,11 +281,8 @@
     if (typeof fn === 'function') fn();
   }
 
-  // ---- Keyboard Shortcuts ----
+  // ---- Keyboard Shortcuts Actions ----
 
-  /**
-   * Toggles play/pause on the active video.
-   */
   function togglePlayPause() {
     const video = getActiveVideo();
     if (!video) return false;
@@ -280,9 +295,6 @@
     return true;
   }
 
-  /**
-   * Seeks backward by the specified seconds.
-   */
   function seekBackward(seconds = 5) {
     const video = getActiveVideo();
     if (!video) return false;
@@ -291,9 +303,6 @@
     return true;
   }
 
-  /**
-   * Seeks forward by the specified seconds.
-   */
   function seekForward(seconds = 5) {
     const video = getActiveVideo();
     if (!video) return false;
@@ -302,9 +311,6 @@
     return true;
   }
 
-  /**
-   * Increases volume by the specified amount (0-1).
-   */
   function increaseVolume(amount = 0.1) {
     const video = getActiveVideo();
     if (!video) return false;
@@ -313,9 +319,6 @@
     return true;
   }
 
-  /**
-   * Decreases volume by the specified amount (0-1).
-   */
   function decreaseVolume(amount = 0.1) {
     const video = getActiveVideo();
     if (!video) return false;
@@ -324,9 +327,6 @@
     return true;
   }
 
-  /**
-   * Cycles to the next higher playback speed.
-   */
   function increaseSpeed() {
     const video = getActiveVideo();
     if (!video) return false;
@@ -338,9 +338,6 @@
     return true;
   }
 
-  /**
-   * Cycles to the next lower playback speed.
-   */
   function decreaseSpeed() {
     const video = getActiveVideo();
     if (!video) return false;
@@ -352,9 +349,6 @@
     return true;
   }
 
-  /**
-   * Resets playback speed to 1x.
-   */
   function resetSpeed() {
     const video = getActiveVideo();
     if (!video) return false;
@@ -381,32 +375,32 @@
     switch (key) {
       case 'k':
       case 'K':
-        handled = togglePlayPause();
+        if (CONFIG.enablePlayPause) handled = togglePlayPause();
         break;
       case 'ArrowLeft':
-        handled = seekBackward(5);
+        if (CONFIG.enableSeekBackward) handled = seekBackward(5);
         break;
       case 'ArrowRight':
-        handled = seekForward(5);
+        if (CONFIG.enableSeekForward) handled = seekForward(5);
         break;
       case 'ArrowUp':
-        handled = increaseVolume(0.1);
+        if (CONFIG.enableVolumeUp) handled = increaseVolume(0.1);
         break;
       case 'ArrowDown':
-        handled = decreaseVolume(0.1);
+        if (CONFIG.enableVolumeDown) handled = decreaseVolume(0.1);
         break;
       case ',':
-        handled = decreaseSpeed();
+        if (CONFIG.enableSpeedDown) handled = decreaseSpeed();
         break;
       case '.':
-        handled = increaseSpeed();
+        if (CONFIG.enableSpeedUp) handled = increaseSpeed();
         break;
       case '0':
-        handled = resetSpeed();
+        if (CONFIG.enableSpeedReset) handled = resetSpeed();
         break;
       case 's':
       case 'S':
-        handled = increaseSpeed();
+        if (CONFIG.enableSpeedUp) handled = increaseSpeed();
         break;
     }
 
