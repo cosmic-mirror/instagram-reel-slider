@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Instagram Reel Slider
 // @namespace    https://github.com/spactable/instagram-reel-slider
-// @version      3.1
+// @version      2.0
 // @description  Minimal progress scrubber for Instagram videos + configurable keyboard shortcuts
-// @author       me
+// @author       spactable
 // @match        https://www.instagram.com/*
 // @grant        none
 // @run-at       document-idle
@@ -15,11 +15,8 @@
   // ==========================================
   // ---- CONFIGURATION (SHORTCUT TOGGLES) ----
   // ==========================================
-  // Change these to `true` to turn a specific shortcut ON.
-  // By default, they are all set to `false` (OFF).
-  // Note: All shortcuts require holding the 'Alt' key.
   const CONFIG = {
-    enablePlayPause: false,    // Alt + K
+    enablePlayPause: true,    // Alt + K
     enableSeekBackward: false, // Alt + ArrowLeft
     enableSeekForward: false,  // Alt + ArrowRight
     enableVolumeUp: false,     // Alt + ArrowUp
@@ -40,62 +37,145 @@
         bottom: 0;
         left: 0;
         width: 100%;
-        height: 6px;
-        z-index: 9999;
-        background: rgba(255, 255, 255, 0.06);
-        cursor: pointer;
-        transition: height 0.15s ease-in-out, opacity 0.15s;
-        opacity: 0.8;
+        height: 12px; /* Thin capture area when unhovered */
+        z-index: 2147483647; /* Maximum z-index to break out of overlays */
+        display: flex;
+        align-items: center;
+        padding: 0;
+        gap: 0;
+        box-sizing: border-box;
+        background: transparent;
+        transition: height 0.2s ease, padding 0.2s ease, background 0.2s ease, gap 0.2s ease;
         pointer-events: auto;
       }
-      .custom-seek-container:hover {
-        height: 10px;
+
+      /* Expand into full player UI on hover */
+      .custom-seek-container:hover,
+      .custom-seek-container:focus-within {
+        height: 48px;
+        padding: 0 16px;
+        gap: 12px;
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, transparent 100%);
+      }
+
+      .play-pause-btn {
+        width: 0; /* Hidden by default */
+        height: 24px;
+        opacity: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        overflow: hidden;
+        transition: width 0.2s ease, opacity 0.2s ease, transform 0.1s ease;
+      }
+      .custom-seek-container:hover .play-pause-btn,
+      .custom-seek-container:focus-within .play-pause-btn {
+        width: 24px;
         opacity: 1;
       }
+      .play-pause-btn:hover {
+        transform: scale(1.15);
+      }
+
+      .time-text {
+        width: 0; /* Hidden by default */
+        opacity: 0;
+        overflow: hidden;
+        color: #ffffff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        user-select: none;
+        text-align: center;
+        transition: width 0.2s ease, opacity 0.2s ease;
+      }
+      .custom-seek-container:hover .time-text,
+      .custom-seek-container:focus-within .time-text {
+        width: 38px;
+        opacity: 1;
+      }
+
       .custom-slider {
         -webkit-appearance: none;
         appearance: none;
-        width: 100%;
-        height: 100%;
-        background: transparent;
+        flex: 1;
+        min-width: 0;
+        height: 3px;
+        border-radius: 1.5px;
+        background: rgba(255, 255, 255, 0.3);
         outline: none;
         margin: 0;
         cursor: pointer;
         display: block;
-        pointer-events: auto;
+        transition: height 0.2s ease;
       }
+      .custom-seek-container:hover .custom-slider,
+      .custom-seek-container:focus-within .custom-slider {
+        height: 5px;
+        border-radius: 2.5px;
+      }
+
+      /* Webkit Thumb - invisible when unhovered */
       .custom-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
         width: 0;
         height: 0;
+        border-radius: 50%;
+        background: #fff;
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+        transition: width 0.2s, height 0.2s, transform 0.1s;
       }
+      .custom-seek-container:hover .custom-slider::-webkit-slider-thumb,
+      .custom-seek-container:focus-within .custom-slider::-webkit-slider-thumb {
+        width: 14px;
+        height: 14px;
+      }
+      .custom-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.25);
+      }
+
+      /* Firefox Thumb - invisible when unhovered */
       .custom-slider::-moz-range-thumb {
         width: 0;
         height: 0;
         border: 0;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+        transition: width 0.2s, height 0.2s, transform 0.1s;
+      }
+      .custom-seek-container:hover .custom-slider::-moz-range-thumb,
+      .custom-seek-container:focus-within .custom-slider::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
       }
     `;
     document.head.appendChild(style);
   }
 
-  // Playback speed options (0.25x to 2x)
   const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const SVG_PLAY = `<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M8 5v14l11-7z"/></svg>`;
+  const SVG_PAUSE = `<svg viewBox="0 0 24 24" width="18" height="18" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
 
-  // State tracking for enhanced videos and cleanup
   const enhanced = new WeakSet();
   const cleanupMap = new WeakMap();
 
-  /**
-   * Gets the most visible/active video element on the page.
-   * Prioritizes videos that are in viewport and playing.
-   */
+  function formatTime(seconds) {
+    if (isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
   function getActiveVideo() {
     const videos = Array.from(document.querySelectorAll('video'));
     if (videos.length === 0) return null;
     if (videos.length === 1) return videos[0];
 
-    // Find video in viewport
     for (const video of videos) {
       const rect = video.getBoundingClientRect();
       const isInViewport =
@@ -104,86 +184,85 @@
         rect.bottom <= window.innerHeight + rect.height &&
         rect.right <= window.innerWidth + rect.width;
 
-      if (isInViewport && rect.width > 100 && rect.height > 100) {
-        return video;
-      }
+      if (isInViewport && rect.width > 100 && rect.height > 100) return video;
     }
 
-    // Fallback to largest video
-    return videos.reduce((largest, video) => {
-      const rect = video.getBoundingClientRect();
-      const largestRect = largest.getBoundingClientRect();
-      return rect.width * rect.height > largestRect.width * largestRect.height
-        ? video
-        : largest;
-    }, videos[0]);
+    return videos[0];
   }
 
-  /**
-   * Finds a suitable parent element to attach the slider container.
-   * Prefers positioned ancestors for proper absolute positioning.
-   */
-  function findAttachmentParent(video) {
+  /** Finds the absolute highest parent element that still precisely bounds the video */
+  function getOptimalParent(video) {
     if (!video) return null;
-    if (video.offsetParent) return video.offsetParent;
+    let current = video.parentElement;
+    let bestMatch = current;
+    const vRect = video.getBoundingClientRect();
 
-    let el = video.parentElement;
-    while (el && el !== document.body) {
-      const pos = getComputedStyle(el).position;
-      if (pos && pos !== 'static') return el;
-      el = el.parentElement;
+    // If video hasn't rendered size yet, fallback to immediate parent
+    if (vRect.width === 0 || vRect.height === 0) return current;
+
+    while (current && current !== document.body) {
+      const rect = current.getBoundingClientRect();
+      // Allow up to 10px difference to account for borders/rounding
+      const isSameHeight = Math.abs(rect.height - vRect.height) <= 10;
+      const isSameWidth = Math.abs(rect.width - vRect.width) <= 10;
+
+      if (isSameHeight && isSameWidth) {
+        bestMatch = current;
+      } else {
+        // We've hit a container that is larger than the video itself; stop here
+        break;
+      }
+      current = current.parentElement;
     }
-    return video.parentElement || document.body;
+
+    const style = getComputedStyle(bestMatch);
+    if (style.position === 'static') {
+      bestMatch.style.position = 'relative';
+    }
+    return bestMatch;
   }
 
-  /**
-   * Updates the slider's visual progress based on video currentTime.
-   */
-  function updateProgress(video, slider) {
+  function updateProgress(video, slider, currentEl, durationEl) {
     if (!video || !slider) return;
-
     const dur = Number(video.duration);
     const cur = Number(video.currentTime);
 
     if (!isNaN(dur) && dur > 0) {
       const pct = Math.max(0, Math.min(100, (cur / dur) * 100));
-      slider.style.background = `linear-gradient(to right, rgba(255,255,255,0.85) ${pct}%, rgba(255,255,255,0.18) ${pct}%)`;
+      slider.style.background = `linear-gradient(to right, #fff ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
 
-      // Keep slider value synced (avoid clobbering while user is scrubbing)
-      if (document.activeElement !== slider) {
-        slider.value = cur;
-      }
+      if (document.activeElement !== slider) slider.value = cur;
       slider.max = dur;
+
+      if (currentEl) currentEl.textContent = formatTime(cur);
+      if (durationEl) durationEl.textContent = formatTime(dur);
     } else {
-      slider.style.background = 'linear-gradient(to right, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.18) 0%)';
+      slider.style.background = 'linear-gradient(to right, #fff 0%, rgba(255,255,255,0.2) 0%)';
+      if (currentEl) currentEl.textContent = "0:00";
+      if (durationEl) durationEl.textContent = "0:00";
     }
   }
 
-  /**
-   * Creates and attaches the slider controls to a video element.
-   * Idempotent - safe to call multiple times on the same video.
-   */
   function createControls(video) {
     if (!video || !(video instanceof HTMLVideoElement)) return;
     if (enhanced.has(video)) return;
 
-    const parent = findAttachmentParent(video);
+    const parent = getOptimalParent(video);
     if (!parent) return;
 
-    // Check for existing container to avoid duplicates
-    const existing = parent.querySelector && parent.querySelector('.custom-seek-container');
-    if (existing) {
-      const linked = existing.dataset && existing.dataset.forVideo === (video.dataset && video.dataset.customId);
-      if (linked) {
-        enhanced.add(video);
-        return;
-      }
-    }
+    const existing = parent.querySelector('.custom-seek-container');
+    if (existing) return;
 
-    // Create DOM elements
     const container = document.createElement('div');
     container.className = 'custom-seek-container';
-    container.setAttribute('aria-hidden', 'true');
+
+    const playPauseBtn = document.createElement('div');
+    playPauseBtn.className = 'play-pause-btn';
+    playPauseBtn.innerHTML = video.paused ? SVG_PLAY : SVG_PAUSE;
+
+    const currentTimeEl = document.createElement('div');
+    currentTimeEl.className = 'time-text current-time';
+    currentTimeEl.textContent = '0:00';
 
     const slider = document.createElement('input');
     slider.type = 'range';
@@ -192,28 +271,31 @@
     slider.step = 0.01;
     slider.value = 0;
 
-    // Prevent clicks from propagating to Instagram's handlers
-    function stopProp(e) {
+    const durationEl = document.createElement('div');
+    durationEl.className = 'time-text duration-time';
+    durationEl.textContent = '0:00';
+
+    // Prevent ALL clicks/touches from propagating to Instagram's invisible overlays
+    function stopProp(e) { e.stopPropagation(); }
+    ['click', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(evt => {
+      container.addEventListener(evt, stopProp, { capture: true });
+    });
+
+    function togglePlay(e) {
       e.stopPropagation();
+      if (video.paused) video.play();
+      else video.pause();
     }
-    container.addEventListener('click', stopProp, { capture: true });
-    container.addEventListener('mousedown', stopProp, { capture: true });
-    slider.addEventListener('click', stopProp, { capture: true });
+    playPauseBtn.addEventListener('click', togglePlay);
 
-    // Named handlers for proper cleanup
-    function onTimeUpdate() {
-      updateProgress(video, slider);
+    function onPlayStateChange() {
+      playPauseBtn.innerHTML = video.paused ? SVG_PLAY : SVG_PAUSE;
     }
 
+    function onTimeUpdate() { updateProgress(video, slider, currentTimeEl, durationEl); }
     function onLoadedMetadata() {
-      if (!isNaN(video.duration)) {
-        slider.max = video.duration;
-      }
-      updateProgress(video, slider);
-    }
-
-    function onSeeked() {
-      updateProgress(video, slider);
+      if (!isNaN(video.duration)) slider.max = video.duration;
+      updateProgress(video, slider, currentTimeEl, durationEl);
     }
 
     function onSliderInput() {
@@ -221,187 +303,78 @@
       if (!isNaN(t)) {
         try {
           video.currentTime = t;
-          updateProgress(video, slider);
-        } catch (err) {
-          // Ignore DOM exceptions (e.g., if video is not seekable)
-        }
+          updateProgress(video, slider, currentTimeEl, durationEl);
+        } catch (err) {}
       }
     }
 
-    // Attach listeners
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('loadedmetadata', onLoadedMetadata);
-    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('seeked', onTimeUpdate);
+    video.addEventListener('play', onPlayStateChange);
+    video.addEventListener('pause', onPlayStateChange);
     slider.addEventListener('input', onSliderInput);
 
-    // Insert into DOM
-    parent.appendChild(container);
+    container.appendChild(playPauseBtn);
+    container.appendChild(currentTimeEl);
     container.appendChild(slider);
+    container.appendChild(durationEl);
+    parent.appendChild(container);
 
-    // Sync initial state
     if (!isNaN(video.duration)) slider.max = video.duration;
-    updateProgress(video, slider);
+    updateProgress(video, slider, currentTimeEl, durationEl);
 
-    // Mark as enhanced
     enhanced.add(video);
 
-    // Create cleanup function
     const cleanup = () => {
       try {
         video.removeEventListener('timeupdate', onTimeUpdate);
         video.removeEventListener('loadedmetadata', onLoadedMetadata);
-        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('seeked', onTimeUpdate);
+        video.removeEventListener('play', onPlayStateChange);
+        video.removeEventListener('pause', onPlayStateChange);
         slider.removeEventListener('input', onSliderInput);
-        container.removeEventListener('click', stopProp, { capture: true });
-        container.removeEventListener('mousedown', stopProp, { capture: true });
-        slider.removeEventListener('click', stopProp, { capture: true });
-      } catch (e) {
-        // Ignore if already removed
-      }
-      try {
-        if (container.parentElement) {
-          container.parentElement.removeChild(container);
-        }
+        playPauseBtn.removeEventListener('click', togglePlay);
       } catch (e) {}
-      try {
-        enhanced.delete(video);
-      } catch (e) {}
+      try { if (container.parentElement) container.parentElement.removeChild(container); } catch (e) {}
+      enhanced.delete(video);
       cleanupMap.delete(video);
     };
 
     cleanupMap.set(video, cleanup);
   }
 
-  /**
-   * Cleans up all enhancements from a video element.
-   */
   function cleanupVideo(video) {
     if (!video) return;
     const fn = cleanupMap.get(video);
     if (typeof fn === 'function') fn();
   }
 
-  // ---- Keyboard Shortcuts Actions ----
+  // ==== Keyboard Handling ====
+  function togglePlayPause() { const v = getActiveVideo(); if (v) { v.paused ? v.play() : v.pause(); return true; } }
+  function seekBackward(s = 5) { const v = getActiveVideo(); if (v) { v.currentTime = Math.max(0, v.currentTime - s); return true; } }
+  function seekForward(s = 5) { const v = getActiveVideo(); if (v) { v.currentTime = Math.min(v.duration || v.currentTime + s, v.currentTime + s); return true; } }
+  function increaseVolume(a = 0.1) { const v = getActiveVideo(); if (v) { v.volume = Math.min(1, v.volume + a); return true; } }
+  function decreaseVolume(a = 0.1) { const v = getActiveVideo(); if (v) { v.volume = Math.max(0, v.volume - a); return true; } }
+  function increaseSpeed() { const v = getActiveVideo(); if (v) { const i = PLAYBACK_SPEEDS.indexOf(v.playbackRate || 1); v.playbackRate = PLAYBACK_SPEEDS[Math.min(i + 1, PLAYBACK_SPEEDS.length - 1)]; return true; } }
+  function decreaseSpeed() { const v = getActiveVideo(); if (v) { const i = PLAYBACK_SPEEDS.indexOf(v.playbackRate || 1); v.playbackRate = PLAYBACK_SPEEDS[Math.max(i - 1, 0)]; return true; } }
+  function resetSpeed() { const v = getActiveVideo(); if (v) { v.playbackRate = 1; return true; } }
 
-  function togglePlayPause() {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    if (video.paused) {
-      video.play();
-    } else {
-      video.pause();
-    }
-    return true;
-  }
-
-  function seekBackward(seconds = 5) {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    video.currentTime = Math.max(0, video.currentTime - seconds);
-    return true;
-  }
-
-  function seekForward(seconds = 5) {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    video.currentTime = Math.min(video.duration || video.currentTime + seconds, video.currentTime + seconds);
-    return true;
-  }
-
-  function increaseVolume(amount = 0.1) {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    video.volume = Math.min(1, video.volume + amount);
-    return true;
-  }
-
-  function decreaseVolume(amount = 0.1) {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    video.volume = Math.max(0, video.volume - amount);
-    return true;
-  }
-
-  function increaseSpeed() {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    const currentSpeed = video.playbackRate || 1;
-    const currentIndex = PLAYBACK_SPEEDS.indexOf(currentSpeed);
-    const nextIndex = Math.min(currentIndex + 1, PLAYBACK_SPEEDS.length - 1);
-    video.playbackRate = PLAYBACK_SPEEDS[nextIndex];
-    return true;
-  }
-
-  function decreaseSpeed() {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    const currentSpeed = video.playbackRate || 1;
-    const currentIndex = PLAYBACK_SPEEDS.indexOf(currentSpeed);
-    const prevIndex = Math.max(currentIndex - 1, 0);
-    video.playbackRate = PLAYBACK_SPEEDS[prevIndex];
-    return true;
-  }
-
-  function resetSpeed() {
-    const video = getActiveVideo();
-    if (!video) return false;
-
-    video.playbackRate = 1;
-    return true;
-  }
-
-  // Keyboard shortcut handler
   function handleKeyDown(event) {
-    // Ignore if user is typing in an input field
-    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
-      return;
-    }
-
-    const key = event.key;
-    const altKey = event.altKey;
-
-    // All shortcuts use Alt modifier to avoid conflicts
-    if (!altKey) return;
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') return;
+    if (!event.altKey) return;
 
     let handled = false;
-
-    switch (key) {
-      case 'k':
-      case 'K':
-        if (CONFIG.enablePlayPause) handled = togglePlayPause();
-        break;
-      case 'ArrowLeft':
-        if (CONFIG.enableSeekBackward) handled = seekBackward(5);
-        break;
-      case 'ArrowRight':
-        if (CONFIG.enableSeekForward) handled = seekForward(5);
-        break;
-      case 'ArrowUp':
-        if (CONFIG.enableVolumeUp) handled = increaseVolume(0.1);
-        break;
-      case 'ArrowDown':
-        if (CONFIG.enableVolumeDown) handled = decreaseVolume(0.1);
-        break;
-      case ',':
-        if (CONFIG.enableSpeedDown) handled = decreaseSpeed();
-        break;
-      case '.':
-        if (CONFIG.enableSpeedUp) handled = increaseSpeed();
-        break;
-      case '0':
-        if (CONFIG.enableSpeedReset) handled = resetSpeed();
-        break;
-      case 's':
-      case 'S':
-        if (CONFIG.enableSpeedUp) handled = increaseSpeed();
-        break;
+    switch (event.key) {
+      case 'k': case 'K': if (CONFIG.enablePlayPause) handled = togglePlayPause(); break;
+      case 'ArrowLeft': if (CONFIG.enableSeekBackward) handled = seekBackward(5); break;
+      case 'ArrowRight': if (CONFIG.enableSeekForward) handled = seekForward(5); break;
+      case 'ArrowUp': if (CONFIG.enableVolumeUp) handled = increaseVolume(0.1); break;
+      case 'ArrowDown': if (CONFIG.enableVolumeDown) handled = decreaseVolume(0.1); break;
+      case ',': if (CONFIG.enableSpeedDown) handled = decreaseSpeed(); break;
+      case '.': if (CONFIG.enableSpeedUp) handled = increaseSpeed(); break;
+      case '0': if (CONFIG.enableSpeedReset) handled = resetSpeed(); break;
+      case 's': case 'S': if (CONFIG.enableSpeedUp) handled = increaseSpeed(); break;
     }
 
     if (handled) {
@@ -410,99 +383,34 @@
     }
   }
 
-  // Initial pass: enhance existing videos
-  try {
-    document.querySelectorAll('video').forEach((v) => {
-      try {
-        createControls(v);
-      } catch (e) {
-        // Individual failures shouldn't break the whole script
-      }
-    });
-  } catch (e) {
-    // Ignore if querySelectorAll is restricted early
-  }
+  // Setup Observer
+  try { document.querySelectorAll('video').forEach((v) => createControls(v)); } catch (e) {}
 
-  // Efficient mutation observer: handle added & removed nodes incrementally
   const observer = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
-      // Process added nodes (fast-path: direct video nodes)
-      if (mutation.addedNodes && mutation.addedNodes.length) {
+      if (mutation.addedNodes) {
         mutation.addedNodes.forEach((node) => {
           if (!node || node.nodeType !== 1) return;
-          try {
-            if (node.tagName === 'VIDEO') {
-              createControls(node);
-            } else if (node.querySelectorAll) {
-              const vids = node.querySelectorAll('video');
-              if (vids && vids.length) {
-                vids.forEach((v) => createControls(v));
-              }
-            }
-          } catch (e) {
-            // Continue on individual failures
+          if (node.tagName === 'VIDEO') createControls(node);
+          else if (node.querySelectorAll) {
+            const vids = node.querySelectorAll('video');
+            if (vids.length) vids.forEach(createControls);
           }
         });
       }
-
-      // Process removed nodes: clean up listeners/containers for removed videos
-      if (mutation.removedNodes && mutation.removedNodes.length) {
+      if (mutation.removedNodes) {
         mutation.removedNodes.forEach((node) => {
           if (!node || node.nodeType !== 1) return;
-          try {
-            if (node.tagName === 'VIDEO') {
-              cleanupVideo(node);
-            } else if (node.querySelectorAll) {
-              const vids = node.querySelectorAll('video');
-              if (vids && vids.length) {
-                vids.forEach((v) => cleanupVideo(v));
-              }
-            }
-          } catch (e) {
-            // Continue on individual failures
+          if (node.tagName === 'VIDEO') cleanupVideo(node);
+          else if (node.querySelectorAll) {
+            const vids = node.querySelectorAll('video');
+            if (vids.length) vids.forEach(cleanupVideo);
           }
         });
       }
     }
   });
 
-  // Start observing body for dynamic SPA changes
   observer.observe(document.body, { childList: true, subtree: true });
-
-  // Attach keyboard shortcut handler
   document.addEventListener('keydown', handleKeyDown, true);
-
-  // Expose debug API on window for troubleshooting
-  try {
-    Object.defineProperty(window, '__instaScrubber', {
-      value: {
-        enhanceAll: () => {
-          document.querySelectorAll('video').forEach(createControls);
-        },
-        enhancedCount: () => {
-          let n = 0;
-          cleanupMap && cleanupMap.forEach && cleanupMap.forEach(() => n++);
-          return n;
-        },
-        cleanupAll: () => {
-          cleanupMap.forEach && cleanupMap.forEach((fn) => fn && fn());
-        },
-        // Keyboard shortcut functions for testing
-        togglePlayPause,
-        seekBackward,
-        seekForward,
-        increaseSpeed,
-        decreaseSpeed,
-        resetSpeed,
-        increaseVolume,
-        decreaseVolume,
-        getActiveVideo
-      },
-      configurable: true,
-      writable: false,
-      enumerable: false
-    });
-  } catch (e) {
-    // Ignore in restricted contexts
-  }
 })();
