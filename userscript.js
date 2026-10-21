@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Instagram Reel Slider
 // @namespace    https://github.com/cosmic-mirror/instagram-reel-slider
-// @version      4.7
-// @description  Minimal progress scrubber for Instagram videos + Hover Tooltip + Smart Anchor + Native Sound Toggle
+// @version      4.8
+// @description  Minimal progress scrubber for Instagram videos + Hover Tooltip + Smart Anchor + Native Sound Toggle (Optimized)
 // @author       me
 // @match        https://www.instagram.com/*
 // @grant        none
@@ -93,12 +93,20 @@
         width: 100%;
         height: 3px;
         border-radius: 1.5px;
-        background: rgba(255, 255, 255, 0.3);
+        /* Hardware-accelerated background via CSS variable (no string re-parsing) */
+        background: linear-gradient(
+          to right,
+          #ffffff 0%,
+          #ffffff var(--slider-progress, 0%),
+          rgba(255, 255, 255, 0.3) var(--slider-progress, 0%),
+          rgba(255, 255, 255, 0.3) 100%
+        );
         outline: none;
         margin: 0;
         cursor: pointer;
         display: block;
         transition: height 0.2s ease;
+        will-change: background;
       }
       .custom-seek-container:hover .custom-slider,
       .custom-seek-container:focus-within .custom-slider {
@@ -206,29 +214,42 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  // Optimized: 2D Viewport checks & live HTMLCollection access
   function getActiveVideo() {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
     if (lastInteractedVideo && lastInteractedVideo.isConnected) {
       const rect = lastInteractedVideo.getBoundingClientRect();
-      if (rect.bottom > 0 && rect.top < window.innerHeight) {
+      if (rect.bottom > 0 && rect.top < vh && rect.right > 0 && rect.left < vw) {
         return lastInteractedVideo;
       }
     }
 
-    const videos = Array.from(document.querySelectorAll('video'));
+    const videos = document.getElementsByTagName('video');
     if (videos.length === 0) return null;
 
-    const playing = videos.find(v => !v.paused && v.currentTime > 0);
-    if (playing) return playing;
-
-    const viewportCenter = window.innerHeight / 2;
+    let playing = null;
     let closestVideo = null;
     let minDistance = Infinity;
+    const viewportCenterY = vh / 2;
 
-    for (const video of videos) {
+    for (let i = 0; i < videos.length; i++) {
+      const video = videos[i];
       const rect = video.getBoundingClientRect();
+
+      // Ensure visibility in 2D viewport
+      const isVisible = rect.bottom > 0 && rect.top < vh && rect.right > 0 && rect.left < vw;
+      if (!isVisible) continue;
+
+      if (!video.paused && video.currentTime > 0) {
+        playing = video;
+        break;
+      }
+
       if (rect.width > 100 && rect.height > 100) {
-        const videoCenter = rect.top + rect.height / 2;
-        const distance = Math.abs(viewportCenter - videoCenter);
+        const videoCenterY = rect.top + rect.height / 2;
+        const distance = Math.abs(viewportCenterY - videoCenterY);
         if (distance < minDistance) {
           minDistance = distance;
           closestVideo = video;
@@ -236,37 +257,26 @@
       }
     }
 
-    return closestVideo || videos[0];
+    return playing || closestVideo || videos[0] || null;
   }
 
+  // Optimized: Non-destructive layout detection (prevents layout thrashing & React crashes)
   function getOptimalParent(video) {
     if (!video) return null;
+
     let current = video.parentElement;
-    let bestMatch = current;
-    const vRect = video.getBoundingClientRect();
-
-    if (vRect.width === 0 || vRect.height === 0) return current;
-
-    while (current && current !== document.body) {
-      const rect = current.getBoundingClientRect();
-      const isSameHeight = Math.abs(rect.height - vRect.height) <= 10;
-      const isSameWidth = Math.abs(rect.width - vRect.width) <= 10;
-
-      if (isSameHeight && isSameWidth) {
-        bestMatch = current;
-      } else {
-        break;
+    for (let depth = 0; depth < 3 && current && current !== document.body; depth++) {
+      const style = window.getComputedStyle(current);
+      if (style.position === 'relative' || style.position === 'absolute') {
+        return current;
       }
       current = current.parentElement;
     }
 
-    const style = getComputedStyle(bestMatch);
-    if (style.position === 'static') {
-      bestMatch.style.position = 'relative';
-    }
-    return bestMatch;
+    return video.parentElement;
   }
 
+  // Optimized: CSS Custom Property update & textContent DOM diffing
   function updateProgressUI(video, slider, currentEl, durationEl) {
     if (!video || !slider) return;
     const dur = Number(video.duration);
@@ -274,17 +284,23 @@
 
     if (!isNaN(dur) && dur > 0) {
       const pct = Math.max(0, Math.min(100, (cur / dur) * 100));
-      slider.style.background = `linear-gradient(to right, #fff ${pct}%, rgba(255,255,255,0.2) ${pct}%)`;
+      slider.style.setProperty('--slider-progress', `${pct}%`);
 
       slider.value = cur;
       slider.max = dur;
 
-      if (currentEl) currentEl.textContent = formatTime(cur);
-      if (durationEl) durationEl.textContent = formatTime(dur);
+      const curText = formatTime(cur);
+      if (currentEl && currentEl.textContent !== curText) {
+        currentEl.textContent = curText;
+      }
+      const durText = formatTime(dur);
+      if (durationEl && durationEl.textContent !== durText) {
+        durationEl.textContent = durText;
+      }
     } else {
-      slider.style.background = 'linear-gradient(to right, #fff 0%, rgba(255,255,255,0.2) 0%)';
-      if (currentEl) currentEl.textContent = "0:00";
-      if (durationEl) durationEl.textContent = "0:00";
+      slider.style.setProperty('--slider-progress', '0%');
+      if (currentEl && currentEl.textContent !== "0:00") currentEl.textContent = "0:00";
+      if (durationEl && durationEl.textContent !== "0:00") durationEl.textContent = "0:00";
     }
   }
 
@@ -343,7 +359,6 @@
     const v = getActiveVideo();
     if (!v) return false;
 
-    // 1. Climb up to find the full Reel/Post frame container
     let container = v.closest('article') || v.closest('section') || v.closest('[role="dialog"]');
     if (!container) {
       let curr = v;
@@ -356,7 +371,6 @@
     }
     if (!container) container = document;
 
-    // 2. Try to find the button by accessibility labels (English & Multilingual)
     const candidates = container.querySelectorAll(
       'button[aria-label*="audio" i], button[aria-label*="sound" i], button[aria-label*="mute" i], ' +
       '[role="button"][aria-label*="audio" i], [role="button"][aria-label*="sound" i], [role="button"][aria-label*="mute" i], ' +
@@ -371,7 +385,6 @@
       }
     }
 
-    // 3. Geometry fallback: Find the circular button sitting directly OVER the video frame
     const vRect = v.getBoundingClientRect();
     const allButtons = container.querySelectorAll('button, [role="button"]');
     for (const btn of allButtons) {
@@ -393,7 +406,6 @@
       }
     }
 
-    // 4. Final Fallback: Direct HTML5 property toggle
     v.muted = !v.muted;
     if (!v.muted && v.volume === 0) {
       v.volume = 1;
@@ -404,6 +416,12 @@
   function createControls(video) {
     if (!video || !(video instanceof HTMLVideoElement)) return;
     if (enhanced.has(video)) return;
+
+    // Hydration guard: wait until video has geometry to prevent React component remounting
+    if (video.readyState === 0 && video.videoWidth === 0) {
+      video.addEventListener('loadedmetadata', () => createControls(video), { once: true });
+      return;
+    }
 
     const parent = getOptimalParent(video);
     if (!parent) return;
@@ -442,7 +460,6 @@
     durationEl.className = 'time-text duration-time';
     durationEl.textContent = '0:00';
 
-    // Prevent Instagram tap overlays from intercepting interactions
     function stopProp(e) { e.stopPropagation(); }
     ['click', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(evt => {
       container.addEventListener(evt, stopProp, { capture: true });
@@ -480,7 +497,6 @@
       slider.blur();
     }
 
-    // Hover Tooltip Handlers
     function onHoverMove(e) {
       if (!video || isNaN(video.duration) || video.duration <= 0) return;
       const rect = slider.getBoundingClientRect();
@@ -659,31 +675,49 @@
     }
   }
 
-  // Setup DOM Observer
-  try { document.querySelectorAll('video').forEach((v) => createControls(v)); } catch (e) {}
+  // Setup Batched Lifecycle Observer
+  let rafId = null;
+
+  function scanAndMount() {
+    const vids = document.getElementsByTagName('video');
+    for (let i = 0; i < vids.length; i++) {
+      const v = vids[i];
+      if (!enhanced.has(v)) {
+        createControls(v);
+      }
+    }
+  }
+
+  scanAndMount();
 
   const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      if (mutation.addedNodes) {
-        mutation.addedNodes.forEach((node) => {
-          if (!node || node.nodeType !== 1) return;
-          if (node.tagName === 'VIDEO') createControls(node);
-          else if (node.querySelectorAll) {
-            const vids = node.querySelectorAll('video');
-            if (vids.length) vids.forEach(createControls);
-          }
-        });
+    let hasNewNodes = false;
+
+    for (let i = 0; i < mutations.length; i++) {
+      const mutation = mutations[i];
+      if (mutation.addedNodes.length > 0) {
+        hasNewNodes = true;
       }
-      if (mutation.removedNodes) {
-        mutation.removedNodes.forEach((node) => {
-          if (!node || node.nodeType !== 1) return;
-          if (node.tagName === 'VIDEO') cleanupVideo(node);
-          else if (node.querySelectorAll) {
-            const vids = node.querySelectorAll('video');
-            if (vids.length) vids.forEach(cleanupVideo);
+      if (mutation.removedNodes.length > 0) {
+        for (let j = 0; j < mutation.removedNodes.length; j++) {
+          const node = mutation.removedNodes[j];
+          if (node.nodeType === 1) {
+            if (node.tagName === 'VIDEO') {
+              cleanupVideo(node);
+            } else if (node.getElementsByTagName) {
+              const vids = node.getElementsByTagName('video');
+              for (let k = 0; k < vids.length; k++) cleanupVideo(vids[k]);
+            }
           }
-        });
+        }
       }
+    }
+
+    if (hasNewNodes && !rafId) {
+      rafId = requestAnimationFrame(() => {
+        scanAndMount();
+        rafId = null;
+      });
     }
   });
 
