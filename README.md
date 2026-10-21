@@ -3,7 +3,7 @@
 ### Installation
 To install the userscript, you will need a userscript manager such as Tampermonkey or Violentmonkey. Follow these steps:
 1. Install a userscript manager from your browser's extension store.
-2. Create a new script and paste the code from the [GitHub repository](https://github.com/spactable/instagram-reel-slider).
+2. Create a new script and paste the code from the [GitHub repository](https://github.com/cosmic-mirror/instagram-reel-slider).
 3. Save the script.
 
 
@@ -11,6 +11,9 @@ To install the userscript, you will need a userscript manager such as Tampermonk
 
 #### `Alt + K` — Play / Pause
 Toggles playback on the active video instantly without needing on-screen buttons.
+
+#### `Alt + M` — Toggle Audio (Mute / Unmute)
+Toggles sound on or off natively. Visually flips Instagram's on-screen speaker icon and keeps your sound preference active as you scroll to the next video.
 
 #### `Alt + ArrowLeft` / `Alt + ArrowRight` — Skip ±5 Seconds
 Rewinds or fast-forwards the video by 5 seconds smoothly without video stutter or buffer snap-backs.
