@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Instagram Reel Slider
 // @namespace    https://github.com/cosmic-mirror/instagram-reel-slider
-// @version      4.8
-// @description  Minimal progress scrubber for Instagram videos + Hover Tooltip + Smart Anchor + Native Sound Toggle (Optimized)
+// @version      5.5
+// @description  Minimal progress scrubber for Instagram videos + Hover Tooltip + Smart Anchor + Native Sound Toggle
 // @author       me
 // @match        https://www.instagram.com/*
 // @grant        none
@@ -19,8 +19,8 @@
     enablePlayPause: true,      // Alt + K
     enableSeekBackward: true,   // Alt + ArrowLeft (Skips back 5s)
     enableSeekForward: true,    // Alt + ArrowRight (Skips forward 5s)
-    enableJumpToAnchor: true,   // Alt + R (Replay from last clicked spot or start)
-    enableToggleAudio: true,    // Alt + M (Toggle native Mute / Unmute)
+    enableJumpToAnchor: true,   // Alt + R (Replay from anchor)
+    enableToggleAudio: true,    // Alt + M (Toggle native sound)
     enableVolumeUp: false,      // Alt + ArrowUp
     enableVolumeDown: false,    // Alt + ArrowDown
     enableSpeedDown: false,     // Alt + , (comma)
@@ -29,181 +29,186 @@
   };
   // ==========================================
 
-  // ---- Styles (insert once) ----
-  if (!document.head.querySelector('#insta-custom-seek-styles')) {
+  // ---- Stylesheet ----
+  if (!document.head.querySelector('#ig-native-slider-styles')) {
     const style = document.createElement('style');
-    style.id = 'insta-custom-seek-styles';
+    style.id = 'ig-native-slider-styles';
     style.textContent = `
-      .custom-seek-container {
+      .ig-slider-container {
         position: absolute;
         bottom: 0;
         left: 0;
         width: 100%;
-        height: 12px;
+        height: 14px;
         z-index: 2147483647;
         display: flex;
         align-items: center;
-        padding: 0;
+        padding: 0 16px;
         gap: 0;
         box-sizing: border-box;
         background: transparent;
-        transition: height 0.2s ease, padding 0.2s ease, background 0.2s ease, gap 0.2s ease;
         pointer-events: auto;
+        user-select: none;
+        transition: height 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s,
+                    background 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s,
+                    gap 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s;
       }
 
-      .custom-seek-container:hover,
-      .custom-seek-container:focus-within {
-        height: 48px;
-        padding: 0 16px;
+      .ig-slider-container:hover,
+      .ig-slider-container.active-scrub {
+        height: 36px;
         gap: 12px;
-        background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, transparent 100%);
+        background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.2) 60%, transparent 100%);
+        transition-delay: 0s;
       }
 
-      .time-text {
+      /* Native-spec Time Badges */
+      .ig-time-badge {
         width: 0;
         opacity: 0;
         overflow: hidden;
         color: #ffffff;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+        font-family: -apple-system, "system-ui", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         font-size: 13px;
-        font-weight: 500;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-        user-select: none;
+        font-weight: 600;
+        line-height: 18px;
+        letter-spacing: 0.2px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
         text-align: center;
+        white-space: nowrap;
+        pointer-events: none;
         transition: width 0.2s ease, opacity 0.2s ease;
       }
-      .custom-seek-container:hover .time-text,
-      .custom-seek-container:focus-within .time-text {
+      .ig-slider-container:hover .ig-time-badge,
+      .ig-slider-container.active-scrub .ig-time-badge {
         width: 38px;
         opacity: 1;
       }
 
-      .slider-wrapper {
+      /* Track Hit Zone */
+      .ig-track-wrapper {
         position: relative;
         flex: 1;
         display: flex;
         align-items: center;
         height: 100%;
         min-width: 0;
+        cursor: pointer;
       }
 
-      .custom-slider {
-        -webkit-appearance: none;
-        appearance: none;
+      /* Base Track Rail */
+      .ig-track-rail {
+        position: relative;
         width: 100%;
         height: 3px;
-        border-radius: 1.5px;
-        /* Hardware-accelerated background via CSS variable (no string re-parsing) */
-        background: linear-gradient(
-          to right,
-          #ffffff 0%,
-          #ffffff var(--slider-progress, 0%),
-          rgba(255, 255, 255, 0.3) var(--slider-progress, 0%),
-          rgba(255, 255, 255, 0.3) 100%
-        );
-        outline: none;
-        margin: 0;
-        cursor: pointer;
-        display: block;
-        transition: height 0.2s ease;
-        will-change: background;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.24);
+        transition: height 0.15s ease;
+        overflow: visible;
       }
-      .custom-seek-container:hover .custom-slider,
-      .custom-seek-container:focus-within .custom-slider {
+      .ig-slider-container:hover .ig-track-rail,
+      .ig-slider-container.active-scrub .ig-track-rail {
         height: 5px;
-        border-radius: 2.5px;
       }
 
-      /* Hover Time Tooltip */
-      .slider-tooltip {
+      /* Ghost Preview Bar */
+      .ig-track-ghost {
         position: absolute;
-        bottom: calc(100% - 2px);
-        left: 0;
-        transform: translateX(-50%);
-        background: rgba(18, 18, 18, 0.92);
-        color: #ffffff;
-        padding: 3px 7px;
-        border-radius: 4px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.3px;
+        top: 0;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.45);
+        border-radius: 9999px;
         pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.15s ease;
-        white-space: nowrap;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        z-index: 10;
-        user-select: none;
-      }
-      .slider-tooltip.visible {
-        opacity: 1;
+        display: none;
       }
 
-      /* Anchor Marker Pin */
-      .slider-anchor-pin {
+      /* Solid Active Progress */
+      .ig-track-fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 0%;
+        background: #ffffff;
+        border-radius: 9999px;
+        pointer-events: none;
+      }
+
+      /* Anchor Marker */
+      .ig-track-anchor {
         position: absolute;
         top: 50%;
-        width: 4px;
+        width: 3px;
         height: 8px;
         background-color: #38bdf8;
-        border-radius: 2px;
+        border-radius: 9999px;
         transform: translate(-50%, -50%);
         pointer-events: none;
         z-index: 2;
         display: none;
-        box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
-        transition: height 0.2s ease;
+        box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+        transition: height 0.15s ease;
       }
-      .custom-seek-container:hover .slider-anchor-pin,
-      .custom-seek-container:focus-within .slider-anchor-pin {
-        height: 14px;
-      }
-
-      /* Webkit Slider Thumb */
-      .custom-slider::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 0;
-        height: 0;
-        border-radius: 50%;
-        background: #fff;
-        cursor: pointer;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.6);
-        transition: width 0.2s, height 0.2s, transform 0.1s;
-      }
-      .custom-seek-container:hover .custom-slider::-webkit-slider-thumb,
-      .custom-seek-container:focus-within .custom-slider::-webkit-slider-thumb {
-        width: 14px;
-        height: 14px;
-      }
-      .custom-slider::-webkit-slider-thumb:hover {
-        transform: scale(1.25);
+      .ig-slider-container:hover .ig-track-anchor,
+      .ig-slider-container.active-scrub .ig-track-anchor {
+        height: 12px;
       }
 
-      /* Firefox Slider Thumb */
-      .custom-slider::-moz-range-thumb {
-        width: 0;
-        height: 0;
-        border: 0;
+      /* Scrub Thumb Dot */
+      .ig-track-thumb {
+        position: absolute;
+        top: 50%;
+        left: 0%;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
-        background: #fff;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.6);
-        transition: width 0.2s, height 0.2s, transform 0.1s;
+        background: #ffffff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        transform: translate(-50%, -50%) scale(0);
+        pointer-events: none;
+        z-index: 3;
+        transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
-      .custom-seek-container:hover .custom-slider::-moz-range-thumb,
-      .custom-seek-container:focus-within .custom-slider::-moz-range-thumb {
-        width: 14px;
-        height: 14px;
+      .ig-slider-container:hover .ig-track-thumb,
+      .ig-slider-container.active-scrub .ig-track-thumb {
+        transform: translate(-50%, -50%) scale(1);
+      }
+
+      /* Frosted Glass Time Tooltip */
+      .ig-track-tooltip {
+        position: absolute;
+        bottom: 24px;
+        left: 0;
+        transform: translateX(-50%) scale(0.85);
+        background: rgba(22, 22, 22, 0.78);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        color: #ffffff;
+        padding: 3px 8px;
+        border-radius: 9999px;
+        font-family: -apple-system, "system-ui", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+        opacity: 0;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+        border: 0.5px solid rgba(255, 255, 255, 0.16);
+        z-index: 10;
+        transition: opacity 0.12s ease, transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      .ig-track-tooltip.visible {
+        opacity: 1;
+        transform: translateX(-50%) scale(1);
       }
     `;
     document.head.appendChild(style);
   }
 
   const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
-
-  const enhanced = new WeakSet();
   const videoStateMap = new WeakMap();
   let lastInteractedVideo = null;
 
@@ -214,94 +219,128 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
-  // Optimized: 2D Viewport checks & live HTMLCollection access
-  function getActiveVideo() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+  // --- Scoped & Geometric Native Detection ---
+  function hasNativePlayer(video) {
+    if (!video) return false;
 
-    if (lastInteractedVideo && lastInteractedVideo.isConnected) {
-      const rect = lastInteractedVideo.getBoundingClientRect();
-      if (rect.bottom > 0 && rect.top < vh && rect.right > 0 && rect.left < vw) {
-        return lastInteractedVideo;
-      }
-    }
-
-    const videos = document.getElementsByTagName('video');
-    if (videos.length === 0) return null;
-
-    let playing = null;
-    let closestVideo = null;
-    let minDistance = Infinity;
-    const viewportCenterY = vh / 2;
-
-    for (let i = 0; i < videos.length; i++) {
-      const video = videos[i];
-      const rect = video.getBoundingClientRect();
-
-      // Ensure visibility in 2D viewport
-      const isVisible = rect.bottom > 0 && rect.top < vh && rect.right > 0 && rect.left < vw;
-      if (!isVisible) continue;
-
-      if (!video.paused && video.currentTime > 0) {
-        playing = video;
+    let curr = video.parentElement;
+    while (curr && curr !== document.body) {
+      if (curr.querySelectorAll('video').length > 1) {
         break;
       }
+      if (curr.querySelector && curr.querySelector('[aria-label="Video progress"]')) {
+        return true;
+      }
+      curr = curr.parentElement;
+    }
 
-      if (rect.width > 100 && rect.height > 100) {
-        const videoCenterY = rect.top + rect.height / 2;
-        const distance = Math.abs(viewportCenterY - videoCenterY);
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestVideo = video;
+    const vRect = video.getBoundingClientRect();
+    if (vRect.width > 0 && vRect.height > 0) {
+      const nativeSliders = document.querySelectorAll('[aria-label="Video progress"]');
+      for (const s of nativeSliders) {
+        const sRect = s.getBoundingClientRect();
+        const overlapsX = sRect.left < vRect.right && sRect.right > vRect.left;
+        const overlapsY = sRect.top < vRect.bottom && sRect.bottom > vRect.top;
+        if (overlapsX && overlapsY) {
+          return true;
         }
       }
     }
 
-    return playing || closestVideo || videos[0] || null;
+    return false;
   }
 
-  // Optimized: Non-destructive layout detection (prevents layout thrashing & React crashes)
+  function getActiveVideo() {
+    if (lastInteractedVideo && lastInteractedVideo.isConnected) {
+      const rect = lastInteractedVideo.getBoundingClientRect();
+      if (rect.bottom > 0 && rect.top < window.innerHeight) {
+        return lastInteractedVideo;
+      }
+    }
+
+    const videos = Array.from(document.querySelectorAll('video'));
+    if (videos.length === 0) return null;
+
+    const playing = videos.find(v => !v.paused && v.currentTime > 0);
+    if (playing) return playing;
+
+    const viewportCenter = window.innerHeight / 2;
+    let closestVideo = null;
+    let minDistance = Infinity;
+
+    for (const v of videos) {
+      const rect = v.getBoundingClientRect();
+      if (rect.width > 80 && rect.height > 80) {
+        const center = rect.top + rect.height / 2;
+        const dist = Math.abs(viewportCenter - center);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestVideo = v;
+        }
+      }
+    }
+    return closestVideo || videos[0];
+  }
+
   function getOptimalParent(video) {
     if (!video) return null;
-
     let current = video.parentElement;
-    for (let depth = 0; depth < 3 && current && current !== document.body; depth++) {
-      const style = window.getComputedStyle(current);
-      if (style.position === 'relative' || style.position === 'absolute') {
-        return current;
+    let bestMatch = current;
+    const vRect = video.getBoundingClientRect();
+    if (vRect.width === 0 || vRect.height === 0) return current;
+
+    while (current && current !== document.body) {
+      const rect = current.getBoundingClientRect();
+      if (Math.abs(rect.height - vRect.height) <= 12 && Math.abs(rect.width - vRect.width) <= 12) {
+        bestMatch = current;
+      } else {
+        break;
       }
       current = current.parentElement;
     }
 
-    return video.parentElement;
+    if (getComputedStyle(bestMatch).position === 'static') {
+      bestMatch.style.position = 'relative';
+    }
+    return bestMatch;
   }
 
-  // Optimized: CSS Custom Property update & textContent DOM diffing
-  function updateProgressUI(video, slider, currentEl, durationEl) {
-    if (!video || !slider) return;
+  function updateProgressUI(state) {
+    if (!state || !state.video) return;
+    const { video, fill, thumb, currentEl, durationEl } = state;
     const dur = Number(video.duration);
     const cur = Number(video.currentTime);
 
     if (!isNaN(dur) && dur > 0) {
       const pct = Math.max(0, Math.min(100, (cur / dur) * 100));
-      slider.style.setProperty('--slider-progress', `${pct}%`);
+      fill.style.width = `${pct}%`;
+      thumb.style.left = `${pct}%`;
 
-      slider.value = cur;
-      slider.max = dur;
-
-      const curText = formatTime(cur);
-      if (currentEl && currentEl.textContent !== curText) {
-        currentEl.textContent = curText;
-      }
-      const durText = formatTime(dur);
-      if (durationEl && durationEl.textContent !== durText) {
-        durationEl.textContent = durText;
-      }
+      if (currentEl) currentEl.textContent = formatTime(cur);
+      if (durationEl) durationEl.textContent = formatTime(dur);
     } else {
-      slider.style.setProperty('--slider-progress', '0%');
-      if (currentEl && currentEl.textContent !== "0:00") currentEl.textContent = "0:00";
-      if (durationEl && durationEl.textContent !== "0:00") durationEl.textContent = "0:00";
+      fill.style.width = '0%';
+      thumb.style.left = '0%';
+      if (currentEl) currentEl.textContent = "0:00";
+      if (durationEl) durationEl.textContent = "0:00";
     }
+  }
+
+  function updateGhostBar(state, hoverPct) {
+    if (!state || !state.ghost) return;
+    const { video, ghost } = state;
+    if (hoverPct === null || isNaN(video.duration) || video.duration <= 0) {
+      ghost.style.display = 'none';
+      return;
+    }
+
+    const curPct = Math.max(0, Math.min(1, video.currentTime / video.duration));
+    const left = Math.min(curPct, hoverPct) * 100;
+    const width = Math.abs(hoverPct - curPct) * 100;
+
+    ghost.style.left = `${left}%`;
+    ghost.style.width = `${width}%`;
+    ghost.style.display = 'block';
   }
 
   function updateAnchorPin(state) {
@@ -319,15 +358,10 @@
   function seekTo(video, targetTime) {
     if (!video || isNaN(video.duration)) return;
     const clamped = Math.max(0, Math.min(video.duration, targetTime));
-
-    try {
-      video.currentTime = clamped;
-    } catch (err) {}
+    try { video.currentTime = clamped; } catch (err) {}
 
     const state = videoStateMap.get(video);
-    if (state) {
-      updateProgressUI(video, state.slider, state.currentTimeEl, state.durationEl);
-    }
+    if (state) updateProgressUI(state);
   }
 
   function setAnchor(video, time) {
@@ -338,16 +372,7 @@
     updateAnchorPin(state);
   }
 
-  function safeTogglePlay(video) {
-    if (!video) return;
-    if (video.paused) {
-      const p = video.play();
-      if (p !== undefined) p.catch(() => {});
-    } else {
-      video.pause();
-    }
-  }
-
+  // --- Restored Original Native Sound Controller ---
   function clickElement(el) {
     if (!el) return;
     el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -359,10 +384,11 @@
     const v = getActiveVideo();
     if (!v) return false;
 
+    // 1. Climb up to find the full Reel/Post frame container
     let container = v.closest('article') || v.closest('section') || v.closest('[role="dialog"]');
     if (!container) {
       let curr = v;
-      for (let i = 0; i < 10 && curr.parentElement && curr.parentElement !== document.body; i++) {
+      for (let i = 0; i < 12 && curr.parentElement && curr.parentElement !== document.body; i++) {
         curr = curr.parentElement;
         if (curr.querySelector('button, [role="button"]')) {
           container = curr;
@@ -371,6 +397,7 @@
     }
     if (!container) container = document;
 
+    // 2. Accessibility label match (English, localized, and SVG icons)
     const candidates = container.querySelectorAll(
       'button[aria-label*="audio" i], button[aria-label*="sound" i], button[aria-label*="mute" i], ' +
       '[role="button"][aria-label*="audio" i], [role="button"][aria-label*="sound" i], [role="button"][aria-label*="mute" i], ' +
@@ -379,16 +406,17 @@
 
     for (const el of candidates) {
       const btn = el.closest('button') || el.closest('[role="button"]') || el;
-      if (btn && btn.isConnected && !btn.closest('.custom-seek-container')) {
+      if (btn && btn.isConnected && !btn.closest('.ig-slider-container')) {
         clickElement(btn);
         return true;
       }
     }
 
+    // 3. Geometry fallback: Find circular button (20-60px) hovering directly over the video
     const vRect = v.getBoundingClientRect();
     const allButtons = container.querySelectorAll('button, [role="button"]');
     for (const btn of allButtons) {
-      if (btn.closest('.custom-seek-container')) continue;
+      if (btn.closest('.ig-slider-container')) continue;
       const bRect = btn.getBoundingClientRect();
 
       const isOverVideo = (
@@ -406,6 +434,7 @@
       }
     }
 
+    // 4. Final Fallback: Direct HTML5 property toggle
     v.muted = !v.muted;
     if (!v.muted && v.volume === 0) {
       v.volume = 1;
@@ -415,50 +444,84 @@
 
   function createControls(video) {
     if (!video || !(video instanceof HTMLVideoElement)) return;
-    if (enhanced.has(video)) return;
 
-    // Hydration guard: wait until video has geometry to prevent React component remounting
-    if (video.readyState === 0 && video.videoWidth === 0) {
-      video.addEventListener('loadedmetadata', () => createControls(video), { once: true });
+    if (hasNativePlayer(video)) {
+      cleanupVideo(video);
+      return;
+    }
+
+    const existingState = videoStateMap.get(video);
+    if (existingState && existingState.container && existingState.container.isConnected) {
       return;
     }
 
     const parent = getOptimalParent(video);
     if (!parent) return;
+    if (parent.querySelector('.ig-slider-container')) return;
 
-    const existing = parent.querySelector('.custom-seek-container');
-    if (existing) return;
-
+    // Build DOM
     const container = document.createElement('div');
-    container.className = 'custom-seek-container';
+    container.className = 'ig-slider-container';
 
-    const currentTimeEl = document.createElement('div');
-    currentTimeEl.className = 'time-text current-time';
-    currentTimeEl.textContent = '0:00';
+    const currentEl = document.createElement('span');
+    currentEl.className = 'ig-time-badge';
+    currentEl.textContent = '0:00';
 
-    const sliderWrapper = document.createElement('div');
-    sliderWrapper.className = 'slider-wrapper';
+    const trackWrapper = document.createElement('div');
+    trackWrapper.className = 'ig-track-wrapper';
 
-    const slider = document.createElement('input');
-    slider.type = 'range';
-    slider.className = 'custom-slider';
-    slider.min = 0;
-    slider.step = 0.01;
-    slider.value = 0;
+    const rail = document.createElement('div');
+    rail.className = 'ig-track-rail';
+
+    const ghost = document.createElement('div');
+    ghost.className = 'ig-track-ghost';
+
+    const fill = document.createElement('div');
+    fill.className = 'ig-track-fill';
 
     const pin = document.createElement('div');
-    pin.className = 'slider-anchor-pin';
+    pin.className = 'ig-track-anchor';
+
+    const thumb = document.createElement('div');
+    thumb.className = 'ig-track-thumb';
 
     const tooltip = document.createElement('div');
-    tooltip.className = 'slider-tooltip';
+    tooltip.className = 'ig-track-tooltip';
 
-    sliderWrapper.appendChild(slider);
-    sliderWrapper.appendChild(pin);
-    sliderWrapper.appendChild(tooltip);
+    rail.appendChild(ghost);
+    rail.appendChild(fill);
+    rail.appendChild(pin);
+    rail.appendChild(thumb);
+    trackWrapper.appendChild(rail);
+    trackWrapper.appendChild(tooltip);
 
-    const durationEl = document.createElement('div');
-    durationEl.className = 'time-text duration-time';
+    const durationEl = document.createElement('span');
+    durationEl.className = 'ig-time-badge';
     durationEl.textContent = '0:00';
+
+    container.appendChild(currentEl);
+    container.appendChild(trackWrapper);
+    container.appendChild(durationEl);
+    parent.appendChild(container);
+
+    const state = {
+      video,
+      container,
+      trackWrapper,
+      rail,
+      ghost,
+      fill,
+      pin,
+      thumb,
+      tooltip,
+      currentEl,
+      durationEl,
+      anchorTime: null,
+      isDragging: false,
+      lastSrc: video.currentSrc
+    };
+
+    videoStateMap.set(video, state);
 
     function stopProp(e) { e.stopPropagation(); }
     ['click', 'mousedown', 'mouseup', 'touchstart', 'touchend'].forEach(evt => {
@@ -466,111 +529,100 @@
     });
 
     function onTimeUpdate() {
-      updateProgressUI(video, slider, currentTimeEl, durationEl);
+      if (!state.isDragging) updateProgressUI(state);
     }
-
     function onLoadedMetadata() {
-      if (!isNaN(video.duration)) slider.max = video.duration;
-      updateProgressUI(video, slider, currentTimeEl, durationEl);
-      const state = videoStateMap.get(video);
-      if (state) updateAnchorPin(state);
+      updateProgressUI(state);
+      updateAnchorPin(state);
     }
-
-    function handleSliderScrub() {
-      const t = parseFloat(slider.value);
-      if (!isNaN(t)) {
-        seekTo(video, t);
-        setAnchor(video, t);
-      }
-    }
-
-    function recordCurrentClick() {
-      lastInteractedVideo = video;
-      const t = parseFloat(slider.value);
-      if (!isNaN(t)) {
-        setAnchor(video, t);
-      }
-    }
-
-    function releaseFocus() {
-      recordCurrentClick();
-      slider.blur();
-    }
-
-    function onHoverMove(e) {
-      if (!video || isNaN(video.duration) || video.duration <= 0) return;
-      const rect = slider.getBoundingClientRect();
-      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-      const pct = x / rect.width;
-      const hoverTime = pct * video.duration;
-
-      tooltip.textContent = formatTime(hoverTime);
-
-      const tooltipWidth = tooltip.offsetWidth || 36;
-      const minX = tooltipWidth / 2;
-      const maxX = rect.width - tooltipWidth / 2;
-      const clampedX = Math.max(minX, Math.min(maxX, x));
-
-      tooltip.style.left = `${clampedX}px`;
-      tooltip.classList.add('visible');
-    }
-
-    function onHoverLeave() {
-      tooltip.classList.remove('visible');
-    }
-
-    slider.addEventListener('pointermove', onHoverMove);
-    slider.addEventListener('pointerleave', onHoverLeave);
-    slider.addEventListener('input', handleSliderScrub);
-    slider.addEventListener('pointerdown', recordCurrentClick);
-    slider.addEventListener('mousedown', recordCurrentClick);
-    slider.addEventListener('change', releaseFocus);
-    slider.addEventListener('mouseup', releaseFocus);
-    slider.addEventListener('touchend', releaseFocus);
 
     video.addEventListener('timeupdate', onTimeUpdate);
     video.addEventListener('loadedmetadata', onLoadedMetadata);
     video.addEventListener('seeked', onTimeUpdate);
 
-    container.appendChild(currentTimeEl);
-    container.appendChild(sliderWrapper);
-    container.appendChild(durationEl);
-    parent.appendChild(container);
+    function getPercentFromEvent(e) {
+      const rect = rail.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    }
 
-    if (!isNaN(video.duration)) slider.max = video.duration;
-    updateProgressUI(video, slider, currentTimeEl, durationEl);
+    function updateTooltip(pct) {
+      if (isNaN(video.duration) || video.duration <= 0) return;
+      tooltip.textContent = formatTime(pct * video.duration);
 
-    enhanced.add(video);
+      const railRect = rail.getBoundingClientRect();
+      const x = pct * railRect.width;
+      const ttWidth = tooltip.offsetWidth || 36;
+      const clampedX = Math.max(ttWidth / 2, Math.min(railRect.width - ttWidth / 2, x));
 
-    const state = {
-      video,
-      slider,
-      pin,
-      tooltip,
-      currentTimeEl,
-      durationEl,
-      anchorTime: null,
-      cleanup: () => {
-        try {
-          video.removeEventListener('timeupdate', onTimeUpdate);
-          video.removeEventListener('loadedmetadata', onLoadedMetadata);
-          video.removeEventListener('seeked', onTimeUpdate);
-          slider.removeEventListener('pointermove', onHoverMove);
-          slider.removeEventListener('pointerleave', onHoverLeave);
-          slider.removeEventListener('input', handleSliderScrub);
-          slider.removeEventListener('pointerdown', recordCurrentClick);
-          slider.removeEventListener('mousedown', recordCurrentClick);
-          slider.removeEventListener('change', releaseFocus);
-          slider.removeEventListener('mouseup', releaseFocus);
-          slider.removeEventListener('touchend', releaseFocus);
-        } catch (e) {}
-        try { if (container.parentElement) container.parentElement.removeChild(container); } catch (e) {}
-        enhanced.delete(video);
-        videoStateMap.delete(video);
+      tooltip.style.left = `${clampedX}px`;
+      tooltip.classList.add('visible');
+    }
+
+    function onPointerMove(e) {
+      const pct = getPercentFromEvent(e);
+      updateGhostBar(state, pct);
+      updateTooltip(pct);
+
+      if (state.isDragging) {
+        seekTo(video, pct * video.duration);
       }
-    };
+    }
 
-    videoStateMap.set(video, state);
+    function onPointerLeave() {
+      if (!state.isDragging) {
+        updateGhostBar(state, null);
+        tooltip.classList.remove('visible');
+      }
+    }
+
+    function onPointerDown(e) {
+      state.isDragging = true;
+      lastInteractedVideo = video;
+      container.classList.add('active-scrub');
+      trackWrapper.setPointerCapture(e.pointerId);
+
+      const pct = getPercentFromEvent(e);
+      seekTo(video, pct * video.duration);
+      setAnchor(video, pct * video.duration);
+      updateTooltip(pct);
+      updateGhostBar(state, pct);
+    }
+
+    function onPointerUp(e) {
+      if (!state.isDragging) return;
+      state.isDragging = false;
+      container.classList.remove('active-scrub');
+      try { trackWrapper.releasePointerCapture(e.pointerId); } catch (err) {}
+
+      const pct = getPercentFromEvent(e);
+      setAnchor(video, pct * video.duration);
+      updateGhostBar(state, null);
+      tooltip.classList.remove('visible');
+    }
+
+    trackWrapper.addEventListener('pointerdown', onPointerDown);
+    trackWrapper.addEventListener('pointermove', onPointerMove);
+    trackWrapper.addEventListener('pointerleave', onPointerLeave);
+    trackWrapper.addEventListener('pointerup', onPointerUp);
+    trackWrapper.addEventListener('pointercancel', onPointerUp);
+
+    updateProgressUI(state);
+
+    state.cleanup = () => {
+      try {
+        video.removeEventListener('timeupdate', onTimeUpdate);
+        video.removeEventListener('loadedmetadata', onLoadedMetadata);
+        video.removeEventListener('seeked', onTimeUpdate);
+        trackWrapper.removeEventListener('pointerdown', onPointerDown);
+        trackWrapper.removeEventListener('pointermove', onPointerMove);
+        trackWrapper.removeEventListener('pointerleave', onPointerLeave);
+        trackWrapper.removeEventListener('pointerup', onPointerUp);
+        trackWrapper.removeEventListener('pointercancel', onPointerUp);
+      } catch (e) {}
+      try { if (container.parentElement) container.parentElement.removeChild(container); } catch (e) {}
+      videoStateMap.delete(video);
+    };
   }
 
   function cleanupVideo(video) {
@@ -581,10 +633,54 @@
     }
   }
 
+  // ==== Virtualized Lifecycle & Navigation Engine ====
+  function scanVideos() {
+    const videos = document.querySelectorAll('video');
+    videos.forEach((v) => {
+      if (hasNativePlayer(v)) {
+        cleanupVideo(v);
+      } else {
+        const state = videoStateMap.get(v);
+        if (state && state.lastSrc !== v.currentSrc) {
+          state.lastSrc = v.currentSrc;
+          state.anchorTime = null;
+          updateProgressUI(state);
+          updateAnchorPin(state);
+        } else if (!state) {
+          createControls(v);
+        }
+      }
+    });
+  }
+
+  // Hook History API
+  const origPushState = history.pushState;
+  history.pushState = function () {
+    origPushState.apply(this, arguments);
+    scheduleScan();
+  };
+  const origReplaceState = history.replaceState;
+  history.replaceState = function () {
+    origReplaceState.apply(this, arguments);
+    scheduleScan();
+  };
+  window.addEventListener('popstate', scheduleScan);
+
+  // Hook Scroll & Swipe events for Reels carousel
+  window.addEventListener('wheel', scheduleScan, { passive: true });
+  window.addEventListener('touchmove', scheduleScan, { passive: true });
+
   // ==== Keyboard Actions ====
   function togglePlayPause() {
     const v = getActiveVideo();
-    if (v) { safeTogglePlay(v); return true; }
+    if (!v) return false;
+    if (v.paused) {
+      const p = v.play();
+      if (p !== undefined) p.catch(() => {});
+    } else {
+      v.pause();
+    }
+    return true;
   }
 
   function seekRelative(seconds) {
@@ -604,48 +700,18 @@
     return true;
   }
 
-  function increaseVolume(a = 0.1) { const v = getActiveVideo(); if (v) { v.volume = Math.min(1, v.volume + a); return true; } }
-  function decreaseVolume(a = 0.1) { const v = getActiveVideo(); if (v) { v.volume = Math.max(0, v.volume - a); return true; } }
-
-  function getClosestSpeedIndex(rate) {
-    return PLAYBACK_SPEEDS.reduce((prev, curr, idx) =>
-      Math.abs(curr - rate) < Math.abs(PLAYBACK_SPEEDS[prev] - rate) ? idx : prev, 0
-    );
-  }
-
-  function increaseSpeed() {
-    const v = getActiveVideo();
-    if (v) {
-      const i = getClosestSpeedIndex(v.playbackRate || 1);
-      v.playbackRate = PLAYBACK_SPEEDS[Math.min(i + 1, PLAYBACK_SPEEDS.length - 1)];
-      return true;
-    }
-  }
-
-  function decreaseSpeed() {
-    const v = getActiveVideo();
-    if (v) {
-      const i = getClosestSpeedIndex(v.playbackRate || 1);
-      v.playbackRate = PLAYBACK_SPEEDS[Math.max(i - 1, 0)];
-      return true;
-    }
-  }
-
-  function resetSpeed() { const v = getActiveVideo(); if (v) { v.playbackRate = 1; return true; } }
-
   function handleKeyDown(event) {
     const isTextEntry =
       (event.target.tagName === 'INPUT' && event.target.type !== 'range') ||
       event.target.tagName === 'TEXTAREA' ||
       event.target.isContentEditable;
 
-    if (isTextEntry) return;
-    if (!event.altKey) return;
+    if (isTextEntry || !event.altKey) return;
 
     let handled = false;
-
     const code = event.code;
     const key = event.key.toLowerCase();
+    const v = getActiveVideo();
 
     if (CONFIG.enablePlayPause && (code === 'KeyK' || key === 'k')) {
       handled = togglePlayPause();
@@ -658,15 +724,25 @@
     } else if (CONFIG.enableJumpToAnchor && (code === 'KeyR' || key === 'r' || key === '®')) {
       handled = jumpToAnchor();
     } else if (CONFIG.enableVolumeUp && (code === 'ArrowUp' || key === 'arrowup')) {
-      handled = increaseVolume(0.1);
+      if (v) { v.volume = Math.min(1, v.volume + 0.1); handled = true; }
     } else if (CONFIG.enableVolumeDown && (code === 'ArrowDown' || key === 'arrowdown')) {
-      handled = decreaseVolume(0.1);
+      if (v) { v.volume = Math.max(0, v.volume - 0.1); handled = true; }
     } else if (CONFIG.enableSpeedDown && (code === 'Comma' || key === ',')) {
-      handled = decreaseSpeed();
+      if (v) {
+        const cur = v.playbackRate || 1;
+        const idx = PLAYBACK_SPEEDS.reduce((p, c, i) => Math.abs(c - cur) < Math.abs(PLAYBACK_SPEEDS[p] - cur) ? i : p, 0);
+        v.playbackRate = PLAYBACK_SPEEDS[Math.max(idx - 1, 0)];
+        handled = true;
+      }
     } else if (CONFIG.enableSpeedUp && (code === 'Period' || key === '.' || code === 'KeyS' || key === 's')) {
-      handled = increaseSpeed();
+      if (v) {
+        const cur = v.playbackRate || 1;
+        const idx = PLAYBACK_SPEEDS.reduce((p, c, i) => Math.abs(c - cur) < Math.abs(PLAYBACK_SPEEDS[p] - cur) ? i : p, 0);
+        v.playbackRate = PLAYBACK_SPEEDS[Math.min(idx + 1, PLAYBACK_SPEEDS.length - 1)];
+        handled = true;
+      }
     } else if (CONFIG.enableSpeedReset && (code === 'Digit0' || key === '0')) {
-      handled = resetSpeed();
+      if (v) { v.playbackRate = 1; handled = true; }
     }
 
     if (handled) {
@@ -675,52 +751,27 @@
     }
   }
 
-  // Setup Batched Lifecycle Observer
-  let rafId = null;
-
-  function scanAndMount() {
-    const vids = document.getElementsByTagName('video');
-    for (let i = 0; i < vids.length; i++) {
-      const v = vids[i];
-      if (!enhanced.has(v)) {
-        createControls(v);
-      }
-    }
+  // Setup DOM Observer
+  let scanRaf = null;
+  function scheduleScan() {
+    if (scanRaf) cancelAnimationFrame(scanRaf);
+    scanRaf = requestAnimationFrame(scanVideos);
   }
 
-  scanAndMount();
-
   const observer = new MutationObserver((mutations) => {
-    let hasNewNodes = false;
-
-    for (let i = 0; i < mutations.length; i++) {
-      const mutation = mutations[i];
-      if (mutation.addedNodes.length > 0) {
-        hasNewNodes = true;
-      }
-      if (mutation.removedNodes.length > 0) {
-        for (let j = 0; j < mutation.removedNodes.length; j++) {
-          const node = mutation.removedNodes[j];
-          if (node.nodeType === 1) {
-            if (node.tagName === 'VIDEO') {
-              cleanupVideo(node);
-            } else if (node.getElementsByTagName) {
-              const vids = node.getElementsByTagName('video');
-              for (let k = 0; k < vids.length; k++) cleanupVideo(vids[k]);
-            }
-          }
-        }
+    let shouldScan = false;
+    for (const m of mutations) {
+      if (m.addedNodes.length || m.removedNodes.length) {
+        shouldScan = true;
+        break;
       }
     }
-
-    if (hasNewNodes && !rafId) {
-      rafId = requestAnimationFrame(() => {
-        scanAndMount();
-        rafId = null;
-      });
-    }
+    if (shouldScan) scheduleScan();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
   document.addEventListener('keydown', handleKeyDown, true);
+
+  // Initial Boot
+  scheduleScan();
 })();
