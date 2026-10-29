@@ -49,13 +49,13 @@
         background: transparent;
         pointer-events: auto;
         user-select: none;
-        transition: height 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s,
-                    background 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s,
+        transition: height 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s, 
+                    background 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s, 
                     gap 0.2s cubic-bezier(0.2, 0, 0, 1) 0.06s;
       }
 
       .ig-slider-container:hover,
-      .ig-slider-container.active-scrub {
+      .ig-slider-container:focus-within {
         height: 36px;
         gap: 12px;
         background: linear-gradient(to top, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.2) 60%, transparent 100%);
@@ -81,62 +81,100 @@
         transition: width 0.2s ease, opacity 0.2s ease;
       }
       .ig-slider-container:hover .ig-time-badge,
-      .ig-slider-container.active-scrub .ig-time-badge {
+      .ig-slider-container:focus-within .ig-time-badge {
         width: 38px;
         opacity: 1;
       }
 
-      /* Track Hit Zone */
-      .ig-track-wrapper {
+      /* Slider Track Wrapper */
+      .ig-slider-wrapper {
         position: relative;
         flex: 1;
         display: flex;
         align-items: center;
         height: 100%;
         min-width: 0;
-        cursor: pointer;
       }
 
-      /* Base Track Rail */
-      .ig-track-rail {
+      /* Native Slider Input */
+      .ig-range-slider {
+        -webkit-appearance: none;
+        appearance: none;
         position: relative;
+        z-index: 2;
         width: 100%;
         height: 3px;
         border-radius: 9999px;
         background: rgba(255, 255, 255, 0.24);
+        outline: none;
+        margin: 0;
+        cursor: pointer;
+        display: block;
         transition: height 0.15s ease;
-        overflow: visible;
       }
-      .ig-slider-container:hover .ig-track-rail,
-      .ig-slider-container.active-scrub .ig-track-rail {
+      .ig-slider-container:hover .ig-range-slider,
+      .ig-slider-container:focus-within .ig-range-slider {
         height: 5px;
       }
 
-      /* Ghost Preview Bar */
-      .ig-track-ghost {
-        position: absolute;
-        top: 0;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.45);
-        border-radius: 9999px;
-        pointer-events: none;
-        display: none;
+      /* Webkit Slider Thumb */
+      .ig-range-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: #ffffff;
+        cursor: pointer;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        transition: width 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                    height 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                    transform 0.1s ease;
+      }
+      .ig-slider-container:hover .ig-range-slider::-webkit-slider-thumb,
+      .ig-slider-container:focus-within .ig-range-slider::-webkit-slider-thumb {
+        width: 12px;
+        height: 12px;
+      }
+      .ig-range-slider::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
       }
 
-      /* Solid Active Progress */
-      .ig-track-fill {
-        position: absolute;
-        top: 0;
-        left: 0;
-        height: 100%;
-        width: 0%;
+      /* Firefox Slider Thumb */
+      .ig-range-slider::-moz-range-thumb {
+        width: 0;
+        height: 0;
+        border: 0;
+        border-radius: 50%;
         background: #ffffff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        transition: width 0.15s ease, height 0.15s ease;
+      }
+      .ig-slider-container:hover .ig-range-slider::-moz-range-thumb,
+      .ig-slider-container:focus-within .ig-range-slider::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* Ghost Preview Bar (Between playhead and cursor) */
+      .ig-ghost-preview {
+        position: absolute;
+        top: 50%;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.45);
         border-radius: 9999px;
+        transform: translateY(-50%);
         pointer-events: none;
+        z-index: 1;
+        display: none;
+        transition: height 0.15s ease;
+      }
+      .ig-slider-container:hover .ig-ghost-preview {
+        height: 5px;
       }
 
       /* Anchor Marker */
-      .ig-track-anchor {
+      .ig-anchor-pin {
         position: absolute;
         top: 50%;
         width: 3px;
@@ -145,38 +183,17 @@
         border-radius: 9999px;
         transform: translate(-50%, -50%);
         pointer-events: none;
-        z-index: 2;
+        z-index: 3;
         display: none;
         box-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
         transition: height 0.15s ease;
       }
-      .ig-slider-container:hover .ig-track-anchor,
-      .ig-slider-container.active-scrub .ig-track-anchor {
+      .ig-slider-container:hover .ig-anchor-pin {
         height: 12px;
-      }
-
-      /* Scrub Thumb Dot */
-      .ig-track-thumb {
-        position: absolute;
-        top: 50%;
-        left: 0%;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        background: #ffffff;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
-        transform: translate(-50%, -50%) scale(0);
-        pointer-events: none;
-        z-index: 3;
-        transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      }
-      .ig-slider-container:hover .ig-track-thumb,
-      .ig-slider-container.active-scrub .ig-track-thumb {
-        transform: translate(-50%, -50%) scale(1);
       }
 
       /* Frosted Glass Time Tooltip */
-      .ig-track-tooltip {
+      .ig-time-tooltip {
         position: absolute;
         bottom: 24px;
         left: 0;
@@ -200,7 +217,7 @@
         z-index: 10;
         transition: opacity 0.12s ease, transform 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
-      .ig-track-tooltip.visible {
+      .ig-time-tooltip.visible {
         opacity: 1;
         transform: translateX(-50%) scale(1);
       }
@@ -213,21 +230,18 @@
   let lastInteractedVideo = null;
 
   function formatTime(seconds) {
-    if (isNaN(seconds) || seconds < 0) return "0:00";
+    if (isNaN(seconds) || seconds < 0 || !isFinite(seconds)) return "0:00";
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
-  // --- Scoped & Geometric Native Detection ---
   function hasNativePlayer(video) {
     if (!video) return false;
 
     let curr = video.parentElement;
     while (curr && curr !== document.body) {
-      if (curr.querySelectorAll('video').length > 1) {
-        break;
-      }
+      if (curr.querySelectorAll('video').length > 1) break;
       if (curr.querySelector && curr.querySelector('[aria-label="Video progress"]')) {
         return true;
       }
@@ -239,14 +253,12 @@
       const nativeSliders = document.querySelectorAll('[aria-label="Video progress"]');
       for (const s of nativeSliders) {
         const sRect = s.getBoundingClientRect();
-        const overlapsX = sRect.left < vRect.right && sRect.right > vRect.left;
-        const overlapsY = sRect.top < vRect.bottom && sRect.bottom > vRect.top;
-        if (overlapsX && overlapsY) {
+        if (sRect.left < vRect.right && sRect.right > vRect.left &&
+            sRect.top < vRect.bottom && sRect.bottom > vRect.top) {
           return true;
         }
       }
     }
-
     return false;
   }
 
@@ -290,6 +302,11 @@
     if (vRect.width === 0 || vRect.height === 0) return current;
 
     while (current && current !== document.body) {
+      if (current.querySelectorAll('video').length > 1) break;
+      if (current.tagName === 'ARTICLE' || current.getAttribute('role') === 'presentation') {
+        bestMatch = current;
+        break;
+      }
       const rect = current.getBoundingClientRect();
       if (Math.abs(rect.height - vRect.height) <= 12 && Math.abs(rect.width - vRect.width) <= 12) {
         bestMatch = current;
@@ -306,58 +323,45 @@
   }
 
   function updateProgressUI(state) {
-    if (!state || !state.video) return;
-    const { video, fill, thumb, currentEl, durationEl } = state;
+    if (!state || !state.video || !state.slider) return;
+    const { video, slider, currentEl, durationEl } = state;
     const dur = Number(video.duration);
     const cur = Number(video.currentTime);
 
-    if (!isNaN(dur) && dur > 0) {
+    if (!isNaN(dur) && dur > 0 && isFinite(dur)) {
       const pct = Math.max(0, Math.min(100, (cur / dur) * 100));
-      fill.style.width = `${pct}%`;
-      thumb.style.left = `${pct}%`;
+      slider.style.background = `linear-gradient(to right, #ffffff ${pct}%, rgba(255, 255, 255, 0.24) ${pct}%)`;
+      slider.value = cur;
+      slider.max = dur;
 
       if (currentEl) currentEl.textContent = formatTime(cur);
       if (durationEl) durationEl.textContent = formatTime(dur);
     } else {
-      fill.style.width = '0%';
-      thumb.style.left = '0%';
+      slider.style.background = 'linear-gradient(to right, #ffffff 0%, rgba(255, 255, 255, 0.24) 0%)';
       if (currentEl) currentEl.textContent = "0:00";
       if (durationEl) durationEl.textContent = "0:00";
     }
   }
 
-  function updateGhostBar(state, hoverPct) {
-    if (!state || !state.ghost) return;
-    const { video, ghost } = state;
-    if (hoverPct === null || isNaN(video.duration) || video.duration <= 0) {
-      ghost.style.display = 'none';
-      return;
-    }
-
-    const curPct = Math.max(0, Math.min(1, video.currentTime / video.duration));
-    const left = Math.min(curPct, hoverPct) * 100;
-    const width = Math.abs(hoverPct - curPct) * 100;
-
-    ghost.style.left = `${left}%`;
-    ghost.style.width = `${width}%`;
-    ghost.style.display = 'block';
-  }
-
   function updateAnchorPin(state) {
     if (!state || !state.pin) return;
     const { video, pin, anchorTime } = state;
-    if (anchorTime === null || isNaN(video.duration) || video.duration <= 0) {
+    const dur = Number(video.duration);
+    if (anchorTime === null || isNaN(dur) || dur <= 0 || !isFinite(dur)) {
       pin.style.display = 'none';
       return;
     }
-    const pct = Math.max(0, Math.min(100, (anchorTime / video.duration) * 100));
+    const pct = Math.max(0, Math.min(100, (anchorTime / dur) * 100));
     pin.style.left = `${pct}%`;
     pin.style.display = 'block';
   }
 
   function seekTo(video, targetTime) {
-    if (!video || isNaN(video.duration)) return;
-    const clamped = Math.max(0, Math.min(video.duration, targetTime));
+    if (!video) return;
+    const dur = Number(video.duration);
+    if (isNaN(dur) || dur <= 0 || !isFinite(dur)) return;
+
+    const clamped = Math.max(0, Math.min(dur, targetTime));
     try { video.currentTime = clamped; } catch (err) {}
 
     const state = videoStateMap.get(video);
@@ -372,7 +376,7 @@
     updateAnchorPin(state);
   }
 
-  // --- Restored Original Native Sound Controller ---
+  // --- Native Sound Controller (4-Stage Fallback) ---
   function clickElement(el) {
     if (!el) return;
     el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -384,20 +388,16 @@
     const v = getActiveVideo();
     if (!v) return false;
 
-    // 1. Climb up to find the full Reel/Post frame container
     let container = v.closest('article') || v.closest('section') || v.closest('[role="dialog"]');
     if (!container) {
       let curr = v;
       for (let i = 0; i < 12 && curr.parentElement && curr.parentElement !== document.body; i++) {
         curr = curr.parentElement;
-        if (curr.querySelector('button, [role="button"]')) {
-          container = curr;
-        }
+        if (curr.querySelector('button, [role="button"]')) container = curr;
       }
     }
     if (!container) container = document;
 
-    // 2. Accessibility label match (English, localized, and SVG icons)
     const candidates = container.querySelectorAll(
       'button[aria-label*="audio" i], button[aria-label*="sound" i], button[aria-label*="mute" i], ' +
       '[role="button"][aria-label*="audio" i], [role="button"][aria-label*="sound" i], [role="button"][aria-label*="mute" i], ' +
@@ -412,7 +412,6 @@
       }
     }
 
-    // 3. Geometry fallback: Find circular button (20-60px) hovering directly over the video
     const vRect = v.getBoundingClientRect();
     const allButtons = container.querySelectorAll('button, [role="button"]');
     for (const btn of allButtons) {
@@ -434,21 +433,14 @@
       }
     }
 
-    // 4. Final Fallback: Direct HTML5 property toggle
     v.muted = !v.muted;
-    if (!v.muted && v.volume === 0) {
-      v.volume = 1;
-    }
+    if (!v.muted && v.volume === 0) v.volume = 1;
     return true;
   }
 
   function createControls(video) {
     if (!video || !(video instanceof HTMLVideoElement)) return;
-
-    if (hasNativePlayer(video)) {
-      cleanupVideo(video);
-      return;
-    }
+    if (hasNativePlayer(video)) return;
 
     const existingState = videoStateMap.get(video);
     if (existingState && existingState.container && existingState.container.isConnected) {
@@ -459,7 +451,6 @@
     if (!parent) return;
     if (parent.querySelector('.ig-slider-container')) return;
 
-    // Build DOM
     const container = document.createElement('div');
     container.className = 'ig-slider-container';
 
@@ -467,57 +458,51 @@
     currentEl.className = 'ig-time-badge';
     currentEl.textContent = '0:00';
 
-    const trackWrapper = document.createElement('div');
-    trackWrapper.className = 'ig-track-wrapper';
-
-    const rail = document.createElement('div');
-    rail.className = 'ig-track-rail';
+    const sliderWrapper = document.createElement('div');
+    sliderWrapper.className = 'ig-slider-wrapper';
 
     const ghost = document.createElement('div');
-    ghost.className = 'ig-track-ghost';
-
-    const fill = document.createElement('div');
-    fill.className = 'ig-track-fill';
+    ghost.className = 'ig-ghost-preview';
 
     const pin = document.createElement('div');
-    pin.className = 'ig-track-anchor';
-
-    const thumb = document.createElement('div');
-    thumb.className = 'ig-track-thumb';
+    pin.className = 'ig-anchor-pin';
 
     const tooltip = document.createElement('div');
-    tooltip.className = 'ig-track-tooltip';
+    tooltip.className = 'ig-time-tooltip';
 
-    rail.appendChild(ghost);
-    rail.appendChild(fill);
-    rail.appendChild(pin);
-    rail.appendChild(thumb);
-    trackWrapper.appendChild(rail);
-    trackWrapper.appendChild(tooltip);
+    // Native range input: guarantees instant, non-failing click-to-seek
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.className = 'ig-range-slider';
+    slider.min = 0;
+    slider.step = 0.01;
+    slider.value = 0;
+
+    sliderWrapper.appendChild(ghost);
+    sliderWrapper.appendChild(pin);
+    sliderWrapper.appendChild(tooltip);
+    sliderWrapper.appendChild(slider);
 
     const durationEl = document.createElement('span');
     durationEl.className = 'ig-time-badge';
     durationEl.textContent = '0:00';
 
     container.appendChild(currentEl);
-    container.appendChild(trackWrapper);
+    container.appendChild(sliderWrapper);
     container.appendChild(durationEl);
     parent.appendChild(container);
 
     const state = {
       video,
       container,
-      trackWrapper,
-      rail,
+      sliderWrapper,
+      slider,
       ghost,
-      fill,
       pin,
-      thumb,
       tooltip,
       currentEl,
       durationEl,
       anchorTime: null,
-      isDragging: false,
       lastSrc: video.currentSrc
     };
 
@@ -528,97 +513,95 @@
       container.addEventListener(evt, stopProp, { capture: true });
     });
 
-    function onTimeUpdate() {
-      if (!state.isDragging) updateProgressUI(state);
-    }
-    function onLoadedMetadata() {
+    // Stream & Duration Listeners
+    function onStreamSync() {
       updateProgressUI(state);
       updateAnchorPin(state);
     }
 
-    video.addEventListener('timeupdate', onTimeUpdate);
-    video.addEventListener('loadedmetadata', onLoadedMetadata);
-    video.addEventListener('seeked', onTimeUpdate);
+    video.addEventListener('timeupdate', onStreamSync);
+    video.addEventListener('durationchange', onStreamSync);
+    video.addEventListener('loadedmetadata', onStreamSync);
+    video.addEventListener('canplay', onStreamSync);
+    video.addEventListener('playing', onStreamSync);
+    video.addEventListener('seeked', onStreamSync);
 
-    function getPercentFromEvent(e) {
-      const rect = rail.getBoundingClientRect();
-      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    // Native Range Scrubbing (Rock-solid)
+    function handleScrub() {
+      const t = parseFloat(slider.value);
+      if (!isNaN(t)) {
+        seekTo(video, t);
+        setAnchor(video, t);
+      }
     }
 
-    function updateTooltip(pct) {
-      if (isNaN(video.duration) || video.duration <= 0) return;
-      tooltip.textContent = formatTime(pct * video.duration);
+    function recordClick() {
+      lastInteractedVideo = video;
+      const t = parseFloat(slider.value);
+      if (!isNaN(t)) setAnchor(video, t);
+    }
 
-      const railRect = rail.getBoundingClientRect();
-      const x = pct * railRect.width;
+    slider.addEventListener('input', handleScrub);
+    slider.addEventListener('pointerdown', recordClick);
+    slider.addEventListener('mousedown', recordClick);
+    slider.addEventListener('change', () => slider.blur());
+
+    // Hover Tooltip & Ghost Fill
+    function onHoverMove(e) {
+      const dur = Number(video.duration);
+      if (isNaN(dur) || dur <= 0 || !isFinite(dur)) {
+        tooltip.classList.remove('visible');
+        ghost.style.display = 'none';
+        return;
+      }
+
+      const rect = slider.getBoundingClientRect();
+      if (rect.width <= 0) return; // Guard against mid-transition layout
+
+      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const hoverPct = x / rect.width;
+      const hoverTime = hoverPct * dur;
+
+      // 1. Update Tooltip
+      tooltip.textContent = formatTime(hoverTime);
       const ttWidth = tooltip.offsetWidth || 36;
-      const clampedX = Math.max(ttWidth / 2, Math.min(railRect.width - ttWidth / 2, x));
-
+      const clampedX = Math.max(ttWidth / 2, Math.min(rect.width - ttWidth / 2, x));
       tooltip.style.left = `${clampedX}px`;
       tooltip.classList.add('visible');
+
+      // 2. Update Ghost Bar (space between pointer and playhead)
+      const curPct = Math.max(0, Math.min(1, (video.currentTime || 0) / dur));
+      const left = Math.min(hoverPct, curPct) * 100;
+      const width = Math.abs(hoverPct - curPct) * 100;
+
+      ghost.style.left = `${left}%`;
+      ghost.style.width = `${width}%`;
+      ghost.style.display = 'block';
     }
 
-    function onPointerMove(e) {
-      const pct = getPercentFromEvent(e);
-      updateGhostBar(state, pct);
-      updateTooltip(pct);
-
-      if (state.isDragging) {
-        seekTo(video, pct * video.duration);
-      }
-    }
-
-    function onPointerLeave() {
-      if (!state.isDragging) {
-        updateGhostBar(state, null);
-        tooltip.classList.remove('visible');
-      }
-    }
-
-    function onPointerDown(e) {
-      state.isDragging = true;
-      lastInteractedVideo = video;
-      container.classList.add('active-scrub');
-      trackWrapper.setPointerCapture(e.pointerId);
-
-      const pct = getPercentFromEvent(e);
-      seekTo(video, pct * video.duration);
-      setAnchor(video, pct * video.duration);
-      updateTooltip(pct);
-      updateGhostBar(state, pct);
-    }
-
-    function onPointerUp(e) {
-      if (!state.isDragging) return;
-      state.isDragging = false;
-      container.classList.remove('active-scrub');
-      try { trackWrapper.releasePointerCapture(e.pointerId); } catch (err) {}
-
-      const pct = getPercentFromEvent(e);
-      setAnchor(video, pct * video.duration);
-      updateGhostBar(state, null);
+    function onHoverLeave() {
       tooltip.classList.remove('visible');
+      ghost.style.display = 'none';
     }
 
-    trackWrapper.addEventListener('pointerdown', onPointerDown);
-    trackWrapper.addEventListener('pointermove', onPointerMove);
-    trackWrapper.addEventListener('pointerleave', onPointerLeave);
-    trackWrapper.addEventListener('pointerup', onPointerUp);
-    trackWrapper.addEventListener('pointercancel', onPointerUp);
+    slider.addEventListener('pointermove', onHoverMove);
+    slider.addEventListener('pointerleave', onHoverLeave);
 
     updateProgressUI(state);
 
     state.cleanup = () => {
       try {
-        video.removeEventListener('timeupdate', onTimeUpdate);
-        video.removeEventListener('loadedmetadata', onLoadedMetadata);
-        video.removeEventListener('seeked', onTimeUpdate);
-        trackWrapper.removeEventListener('pointerdown', onPointerDown);
-        trackWrapper.removeEventListener('pointermove', onPointerMove);
-        trackWrapper.removeEventListener('pointerleave', onPointerLeave);
-        trackWrapper.removeEventListener('pointerup', onPointerUp);
-        trackWrapper.removeEventListener('pointercancel', onPointerUp);
+        video.removeEventListener('timeupdate', onStreamSync);
+        video.removeEventListener('durationchange', onStreamSync);
+        video.removeEventListener('loadedmetadata', onStreamSync);
+        video.removeEventListener('canplay', onStreamSync);
+        video.removeEventListener('playing', onStreamSync);
+        video.removeEventListener('seeked', onStreamSync);
+        slider.removeEventListener('input', handleScrub);
+        slider.removeEventListener('pointerdown', recordClick);
+        slider.removeEventListener('mousedown', recordClick);
+        slider.removeEventListener('pointermove', onHoverMove);
+        slider.removeEventListener('pointerleave', onHoverLeave);
       } catch (e) {}
       try { if (container.parentElement) container.parentElement.removeChild(container); } catch (e) {}
       videoStateMap.delete(video);
@@ -633,7 +616,7 @@
     }
   }
 
-  // ==== Virtualized Lifecycle & Navigation Engine ====
+  // ==== Virtualized Lifecycle Engine ====
   function scanVideos() {
     const videos = document.querySelectorAll('video');
     videos.forEach((v) => {
@@ -641,19 +624,20 @@
         cleanupVideo(v);
       } else {
         const state = videoStateMap.get(v);
-        if (state && state.lastSrc !== v.currentSrc) {
-          state.lastSrc = v.currentSrc;
-          state.anchorTime = null;
-          updateProgressUI(state);
-          updateAnchorPin(state);
-        } else if (!state) {
+        if (state) {
+          if (state.lastSrc !== v.currentSrc || !state.container.isConnected) {
+            cleanupVideo(v);
+            createControls(v);
+          } else {
+            updateProgressUI(state);
+          }
+        } else {
           createControls(v);
         }
       }
     });
   }
 
-  // Hook History API
   const origPushState = history.pushState;
   history.pushState = function () {
     origPushState.apply(this, arguments);
@@ -665,8 +649,6 @@
     scheduleScan();
   };
   window.addEventListener('popstate', scheduleScan);
-
-  // Hook Scroll & Swipe events for Reels carousel
   window.addEventListener('wheel', scheduleScan, { passive: true });
   window.addEventListener('touchmove', scheduleScan, { passive: true });
 
@@ -751,7 +733,6 @@
     }
   }
 
-  // Setup DOM Observer
   let scanRaf = null;
   function scheduleScan() {
     if (scanRaf) cancelAnimationFrame(scanRaf);
@@ -772,6 +753,5 @@
   observer.observe(document.body, { childList: true, subtree: true });
   document.addEventListener('keydown', handleKeyDown, true);
 
-  // Initial Boot
   scheduleScan();
 })();
